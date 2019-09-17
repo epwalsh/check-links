@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use exitfailure::ExitFailure;
 use failure::ResultExt;
-use grep_matcher::Matcher;
+use grep_matcher::{Captures, Matcher};
 use grep_regex::RegexMatcher;
 use grep_searcher::sinks::UTF8;
 use grep_searcher::Searcher;
@@ -31,34 +31,53 @@ struct Opt {
 fn main() -> Result<(), ExitFailure> {
     let opt = Opt::from_args();
 
-    // Initialize output file handle (default to stdout if no path was given).
+    // Initialize output file handle, which defaults to stdout.
     let mut output_handle = BufWriter::new(match &opt.output {
         Some(path) => Box::new(File::create(path).with_context(|_| "Failed to open output file")?)
-            as Box<Write>,
-        None => Box::new(io::stdout()) as Box<Write>,
+            as Box<dyn Write>,
+        None => Box::new(io::stdout()) as Box<dyn Write>,
     });
 
-    let matcher = RegexMatcher::new(r"\[[^\[\]]+\]\([^\(\)]+\)")
+    // This is the regular expression we use to find links.
+    let matcher = RegexMatcher::new(r"\[[^\[\]]+\]\(([^\(\)]+)\)")
         .with_context(|_| "Failed to instatiate matcher")?;
+
     let mut searcher = Searcher::new();
 
-    for x in Walk::new("./")
+    // We iterator through all files not included in .gitignore.
+    let file_iter = Walk::new("./")
         .filter_map(Result::ok)
         .filter(|x| match x.file_type() {
             Some(file_type) => file_type.is_file(),
             None => false,
-        })
-    {
+        });
+
+    for x in file_iter {
         let path = x.path();
+
         write!(output_handle, "\n{}\n", path.display())
             .with_context(|_| "Failed to write output")?;
+
         searcher.search_path(
             &matcher,
             path,
             UTF8(|lnum, line| {
-                // TODO: use `matcher.find_iter` to find all matches on the line.
-                let mymatch = matcher.find(line.as_bytes())?.unwrap();
-                write!(output_handle, "{}: {}\n", lnum, line[mymatch].to_string())?;
+                let mut captures = matcher.new_captures().unwrap();
+                matcher.captures_iter(line.as_bytes(), &mut captures, |c| {
+                    let m = c.get(1).unwrap();
+                    let s = line[m].to_string();
+                    write!(output_handle, "{}: {}", lnum, s).unwrap();
+                    let link = link(s);
+                    match verify(&link) {
+                        LinkStatus::Reachable(msg) => {
+                            write!(output_handle, "  ✓ {}\n", msg).unwrap();
+                        }
+                        LinkStatus::Unreachable(msg) => {
+                            write!(output_handle, "  ✗ {}\n", msg).unwrap();
+                        }
+                    };
+                    true
+                })?;
                 Ok(true)
             }),
         )?;
@@ -67,19 +86,27 @@ fn main() -> Result<(), ExitFailure> {
     Ok(())
 }
 
-// enum Link {
-//     HttpLink(String),
-//     LocalLink(String),
-// }
+fn link(s: String) -> Link {
+    if s.starts_with("http") {
+        Link::HttpLink(s)
+    } else {
+        Link::LocalLink(s)
+    }
+}
 
-// enum LinkStatus {
-//     Reachable(String),
-//     Unreachable(String),
-// }
+enum Link {
+    HttpLink(String),
+    LocalLink(String),
+}
 
-// fn verify(link: &Link) -> LinkStatus {
-//     match link {
-//         Link::HttpLink(url) => LinkStatus::Reachable(format!("{} (200)", url)),
-//         Link::LocalLink(path) => LinkStatus::Unreachable(format!("{} does not exist", path)),
-//     }
-// }
+enum LinkStatus {
+    Reachable(String),
+    Unreachable(String),
+}
+
+fn verify(link: &Link) -> LinkStatus {
+    match link {
+        Link::HttpLink(_) => LinkStatus::Reachable(format!("200")),
+        Link::LocalLink(_) => LinkStatus::Unreachable(format!("does not exist")),
+    }
+}
