@@ -1,0 +1,26 @@
+[package]
+name = "cargo-links"
+version = "0.1.0"
+authors = ["epwalsh <epwalsh10@gmail.com>"]
+edition = "2018"
+license = "MIT/Apache-2.0"
+description = "Cargo extension for verifying links in documentation"
+readme = "README.md"
+homepage = "https://github.com/epwalsh/cargo-links"
+repository = "https://github.com/epwalsh/cargo-links"
+keywords = ["cli", "cargo"]
+categories = ["command-line-utilities"]
+
+[[bin]]
+name = "cargo-links"
+path = "src/main.rs"
+bench = false
+
+[dependencies]
+structopt = "0.2.18"
+failure = "0.1"
+exitfailure = "0.5.1"
+indicatif = "0.11"
+
+[dev-dependencies]
+assert_cmd = "0.10"
