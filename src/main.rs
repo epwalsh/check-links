@@ -65,16 +65,18 @@ fn main() -> Result<(), ExitFailure> {
                 let mut captures = matcher.new_captures().unwrap();
                 matcher.captures_iter(line.as_bytes(), &mut captures, |c| {
                     let m = c.get(1).unwrap();
-                    let s = line[m].to_string();
-                    write!(output_handle, "{}: {}", lnum, s).unwrap();
-                    let link = link(s);
-                    match verify(&link) {
-                        LinkStatus::Reachable(msg) => {
-                            write!(output_handle, "  ✓ {}\n", msg).unwrap();
-                        }
-                        LinkStatus::Unreachable(msg) => {
-                            write!(output_handle, "  ✗ {}\n", msg).unwrap();
-                        }
+                    let raw = line[m].to_string();
+                    // TODO: handle case where path.to_str() is None (if path is not valid
+                    // unicode).
+                    let mut link = Link::new(String::from(path.to_str().unwrap()), lnum as usize, raw);
+                    link.verify();
+                    match link.status.unwrap() {
+                        LinkStatus::Reachable => {
+                            write!(output_handle, "✓ {} {}: {}\n", link.file, link.lnum, link.raw).unwrap();
+                        },
+                        LinkStatus::Unreachable(reason) => {
+                            write!(output_handle, "✗ {} {}: {} ({})\n", link.file, link.lnum, link.raw, reason).unwrap();
+                        },
                     };
                     true
                 })?;
@@ -86,27 +88,28 @@ fn main() -> Result<(), ExitFailure> {
     Ok(())
 }
 
-fn link(s: String) -> Link {
-    if s.starts_with("http") {
-        Link::HttpLink(s)
-    } else {
-        Link::LocalLink(s)
-    }
+struct Link {
+    file: String,
+    lnum: usize,
+    raw: String,
+    status: Option<LinkStatus>,
 }
 
-enum Link {
-    HttpLink(String),
-    LocalLink(String),
+impl Link {
+    fn new(file: String, lnum: usize, raw: String) -> Self {
+        Link { file, lnum, raw, status: None }
+    }
+
+    fn verify(&mut self) {
+        if self.raw.starts_with("http") {
+            self.status = Some(LinkStatus::Reachable);
+        } else {
+            self.status = Some(LinkStatus::Unreachable(String::from("does not exist")));
+        }
+    }
 }
 
 enum LinkStatus {
-    Reachable(String),
+    Reachable,
     Unreachable(String),
-}
-
-fn verify(link: &Link) -> LinkStatus {
-    match link {
-        Link::HttpLink(_) => LinkStatus::Reachable(format!("200")),
-        Link::LocalLink(_) => LinkStatus::Unreachable(format!("does not exist")),
-    }
 }
