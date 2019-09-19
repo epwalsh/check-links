@@ -2,6 +2,7 @@ use std::sync::mpsc::channel;
 use std::sync::Arc;
 
 use exitfailure::ExitFailure;
+use globset::{Glob, GlobSetBuilder};
 use grep_matcher::{Captures, Matcher};
 use grep_regex::RegexMatcher;
 use grep_searcher::sinks::UTF8;
@@ -53,17 +54,22 @@ fn main() -> Result<(), ExitFailure> {
     // We'll use a single HTTP client across threads.
     let http_client = Arc::new(reqwest::Client::new());
 
-    // We iterator through all files not included in .gitignore.
+    // We iterator through all rust and markdown files not included in your .gitignore.
+    let mut glob_builder = GlobSetBuilder::new();
+    glob_builder.add(Glob::new("*.rs")?);
+    glob_builder.add(Glob::new("*.md")?);
+    let glob_set = glob_builder.build()?;
     let file_iter = Walk::new("./")
         .filter_map(Result::ok)
         .filter(|x| match x.file_type() {
             Some(file_type) => file_type.is_file(),
             None => false,
-        });
+        })
+        .map(|x| x.into_path())
+        .filter(|p| glob_set.is_match(p));
 
     let mut n_links = 0;
-    for x in file_iter {
-        let path = x.path();
+    for path in file_iter {
         let path_str = path.to_str();
         if let None = path_str {
             // File path is not valid unicode, just skip.
@@ -81,7 +87,7 @@ fn main() -> Result<(), ExitFailure> {
 
         searcher.search_path(
             &matcher,
-            path,
+            &path,
             UTF8(|lnum, line| {
                 let mut captures = matcher.new_captures().unwrap();
                 matcher.captures_iter(line.as_bytes(), &mut captures, |c| {
