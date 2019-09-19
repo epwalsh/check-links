@@ -8,6 +8,8 @@ use grep_regex::RegexMatcher;
 use grep_searcher::sinks::UTF8;
 use grep_searcher::Searcher;
 
+use crate::link::Link;
+
 pub struct DocFile {
     glob_set: GlobSet,
     pub link_matcher: RegexMatcher,
@@ -34,15 +36,11 @@ impl DocFile {
         self.glob_set.is_match(p)
     }
 
-    pub fn iter_links<F>(
-        &self,
-        searcher: &mut Searcher,
-        p: &Arc<PathBuf>,
-        mut f: F,
-    ) -> Result<(), io::Error>
+    pub fn iter_links<F>(&self, p: &Arc<PathBuf>, mut f: F) -> Result<(), io::Error>
     where
-        F: FnMut(u64, String) -> bool,
+        F: FnMut(Link),
     {
+        let mut searcher = Searcher::new();
         searcher.search_path(
             &self.link_matcher,
             p.as_ref(),
@@ -52,7 +50,9 @@ impl DocFile {
                     .captures_iter(line.as_bytes(), &mut captures, |c| {
                         let mat = c.get(1).unwrap();
                         let mat = line[mat].to_string();
-                        f(lnum, mat)
+                        let link = Link::new(Arc::clone(p), lnum as usize, mat);
+                        f(link);
+                        true
                     })?;
                 Ok(true)
             }),

@@ -106,7 +106,7 @@ impl fmt::Display for Link {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{} {}: {}",
+            "{} [line {}]: {}",
             self.file.as_ref().display(),
             self.lnum,
             self.raw

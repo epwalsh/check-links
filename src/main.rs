@@ -2,7 +2,6 @@ use std::sync::mpsc::channel;
 use std::sync::Arc;
 
 use exitfailure::ExitFailure;
-use grep_searcher::Searcher;
 use ignore::Walk;
 use structopt::StructOpt;
 use threadpool::ThreadPool;
@@ -12,7 +11,7 @@ mod link;
 mod log;
 
 use doc_file::DocFile;
-use link::{Link, LinkStatus};
+use link::LinkStatus;
 use log::Logger;
 
 #[derive(Debug, StructOpt)]
@@ -64,7 +63,6 @@ fn main() -> Result<(), ExitFailure> {
         .map(|x| x.into_path());
 
     let mut n_links = 0;
-    let mut searcher = Searcher::new();
 
     for path in file_iter {
         for doc_file in &doc_files {
@@ -73,16 +71,14 @@ fn main() -> Result<(), ExitFailure> {
 
                 let path_arc = Arc::new(path);
 
-                doc_file.iter_links(&mut searcher, &path_arc, |lnum, mat| {
+                doc_file.iter_links(&path_arc, |mut link| {
                     n_links += 1;
-                    let mut link = Link::new(Arc::clone(&path_arc), lnum as usize, mat);
                     let tx = tx.clone();
                     let http_client = http_client.clone();
                     pool.execute(move || {
                         link.verify(http_client);
                         tx.send(link).unwrap();
                     });
-                    true
                 })?;
 
                 break;
