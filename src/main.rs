@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 
@@ -11,8 +10,10 @@ use ignore::Walk;
 use structopt::StructOpt;
 use threadpool::ThreadPool;
 
+mod link;
 mod log;
 
+use link::{Link, LinkStatus};
 use log::Logger;
 
 #[derive(Debug, StructOpt)]
@@ -107,18 +108,18 @@ fn main() -> Result<(), ExitFailure> {
 
     let mut n_bad_links = 0;
     for link in rx.iter().take(n_links) {
-        match link.status.unwrap() {
+        match link.status.as_ref().unwrap() {
             LinkStatus::Reachable => {
-                logger.info(&format!("✓ {} {}: {}", link.file, link.lnum, link.raw)[..])?;
+                logger.info(&format!("✓ {}", link)[..])?;
+            }
+            LinkStatus::Questionable(reason) => {
+                logger.warn(&format!("✓ {} ({})", link, reason)[..])?
             }
             LinkStatus::Unreachable(reason) => {
                 n_bad_links += 1;
                 match reason {
-                    Some(s) => logger.error(
-                        &format!("✗ {} {}: {} ({})", link.file, link.lnum, link.raw, s)[..],
-                    )?,
-                    None => logger
-                        .error(&format!("✗ {} {}: {}", link.file, link.lnum, link.raw)[..])?,
+                    Some(s) => logger.error(&format!("✗ {} ({})", link, s)[..])?,
+                    None => logger.error(&format!("✗ {}", link)[..])?,
                 };
             }
         };
@@ -130,71 +131,4 @@ fn main() -> Result<(), ExitFailure> {
     }
 
     Ok(())
-}
-
-struct Link {
-    file: String,
-    lnum: usize,
-    raw: String,
-    status: Option<LinkStatus>,
-}
-
-impl Link {
-    fn new(file: String, lnum: usize, raw: String) -> Self {
-        Link {
-            file,
-            lnum,
-            raw,
-            status: None,
-        }
-    }
-
-    fn _verify(&self, http_client: Arc<reqwest::Client>) -> LinkStatus {
-        if self.raw.starts_with("http") {
-            match http_client.head(&self.raw[..]).send() {
-                Ok(response) => {
-                    let status = response.status().as_u16();
-                    match status {
-                        200 => LinkStatus::Reachable,
-                        401 => LinkStatus::Reachable, // the resource exists but may require logging in.
-                        403 => LinkStatus::Reachable, // ^ same
-                        405 => LinkStatus::Reachable, // HEAD method not allowed.
-                        406 => LinkStatus::Reachable, // resource exits, but our 'Accept-' header may not match what the server can provide.
-                        _ => LinkStatus::Unreachable(Some(format!(
-                            "received status code {}",
-                            status
-                        ))),
-                    }
-                }
-                Err(e) => {
-                    if e.is_timeout() {
-                        LinkStatus::Unreachable(Some(String::from("timeout error")))
-                    } else {
-                        match e.status() {
-                            Some(status) => LinkStatus::Unreachable(Some(format!(
-                                "received status code {}",
-                                status
-                            ))),
-                            None => LinkStatus::Unreachable(None),
-                        }
-                    }
-                }
-            }
-        } else {
-            if Path::new(&self.raw[..]).exists() {
-                LinkStatus::Reachable
-            } else {
-                LinkStatus::Unreachable(None)
-            }
-        }
-    }
-
-    fn verify(&mut self, http_client: Arc<reqwest::Client>) {
-        self.status = Some(self._verify(http_client));
-    }
-}
-
-enum LinkStatus {
-    Reachable,
-    Unreachable(Option<String>),
 }
