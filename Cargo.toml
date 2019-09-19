@@ -1,5 +1,5 @@
 [package]
-name = "cargo-links"
+name = "check-links"
 version = "0.1.0"
 authors = ["epwalsh <epwalsh10@gmail.com>"]
 edition = "2018"
@@ -8,11 +8,11 @@ description = "Cargo extension for verifying links in documentation"
 readme = "README.md"
 homepage = "https://github.com/epwalsh/cargo-links"
 repository = "https://github.com/epwalsh/cargo-links"
-keywords = ["cli", "cargo"]
+keywords = ["cli", "ci"]
 categories = ["command-line-utilities"]
 
 [[bin]]
-name = "cargo-links"
+name = "check-links"
 path = "src/main.rs"
 bench = false
 

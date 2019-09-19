@@ -8,4 +8,4 @@
 <!-- [foo](https://vinny.development.structurely.com/slack/command) -->
 <!-- [foo](https://vinny.development.structurely.com/slack/fudge) -->
 
-A Rust Cargo extension for checking links in your crate's documentation.
+A command-line utility for finding unreachable links in your project's documentation.
