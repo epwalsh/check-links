@@ -9,7 +9,4 @@ script:
   cargo build --verbose &&
   cargo test  --verbose &&
   cargo doc   --verbose
-branches:
-  only:
-    - master
 dist: xenial
