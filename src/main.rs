@@ -67,25 +67,15 @@ fn main() -> Result<(), ExitFailure> {
     let mut searcher = Searcher::new();
 
     for path in file_iter {
-        let path_str = path.to_str();
-        if let None = path_str {
-            // File path is not valid unicode, just skip.
-            logger.warn(
-                &format!(
-                    "Filename is not valid unicode, skipping: {}",
-                    path.display()
-                )[..],
-            )?;
-            continue;
-        }
-        let path_str = path_str.unwrap();
         for doc_file in &doc_files {
             if doc_file.is_match(&path) {
                 logger.debug(&format!("Searching {}", path.display())[..])?;
 
-                doc_file.iter_links(&mut searcher, &path, |lnum, mat| {
+                let path_arc = Arc::new(path);
+
+                doc_file.iter_links(&mut searcher, &path_arc, |lnum, mat| {
                     n_links += 1;
-                    let mut link = Link::new(String::from(path_str), lnum as usize, mat);
+                    let mut link = Link::new(Arc::clone(&path_arc), lnum as usize, mat);
                     let tx = tx.clone();
                     let http_client = http_client.clone();
                     pool.execute(move || {

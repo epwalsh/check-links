@@ -1,9 +1,9 @@
 use std::fmt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub struct Link {
-    pub file: String,
+    pub file: Arc<PathBuf>,
     pub lnum: usize,
     pub raw: String,
     pub kind: LinkKind,
@@ -22,7 +22,7 @@ pub enum LinkStatus {
 }
 
 impl Link {
-    pub fn new(file: String, lnum: usize, raw: String) -> Self {
+    pub fn new<'a>(file: Arc<PathBuf>, lnum: usize, raw: String) -> Self {
         let kind: LinkKind;
         if raw.starts_with("http") {
             kind = LinkKind::Http;
@@ -84,7 +84,11 @@ impl Link {
                 }
             }
             LinkKind::Local => {
-                if Path::new(&self.raw[..]).exists() {
+                let dir = match self.file.as_ref().parent() {
+                    Some(d) => d,
+                    None => Path::new("./"),
+                };
+                if dir.join(Path::new(&self.raw[..])).exists() {
                     LinkStatus::Reachable
                 } else {
                     LinkStatus::Unreachable(None)
@@ -100,6 +104,12 @@ impl Link {
 
 impl fmt::Display for Link {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}: {}", self.file, self.lnum, self.raw)
+        write!(
+            f,
+            "{} {}: {}",
+            self.file.as_ref().display(),
+            self.lnum,
+            self.raw
+        )
     }
 }

@@ -1,5 +1,6 @@
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use grep_matcher::{Captures, Matcher};
@@ -33,19 +34,18 @@ impl DocFile {
         self.glob_set.is_match(p)
     }
 
-    pub fn iter_links<P, F>(
+    pub fn iter_links<F>(
         &self,
         searcher: &mut Searcher,
-        p: &P,
+        p: &Arc<PathBuf>,
         mut f: F,
     ) -> Result<(), io::Error>
     where
-        P: AsRef<Path>,
         F: FnMut(u64, String) -> bool,
     {
         searcher.search_path(
             &self.link_matcher,
-            p,
+            p.as_ref(),
             UTF8(|lnum, line| {
                 let mut captures = self.link_matcher.new_captures().unwrap();
                 self.link_matcher

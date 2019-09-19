@@ -1,0 +1,6 @@
+[README](../README.md)
+[foo](foo)
+[foo](https://foo.com)
+[foo](https://vinny.structurely.com)
+[foo](https://vinny.development.structurely.com/slack/command)
+[foo](https://vinny.development.structurely.com/slack/fudge)
