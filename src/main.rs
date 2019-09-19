@@ -113,9 +113,13 @@ fn main() -> Result<(), ExitFailure> {
             }
             LinkStatus::Unreachable(reason) => {
                 n_bad_links += 1;
-                logger.error(
-                    &format!("✗ {} {}: {} ({})", link.file, link.lnum, link.raw, reason)[..],
-                )?;
+                match reason {
+                    Some(s) => logger.error(
+                        &format!("✗ {} {}: {} ({})", link.file, link.lnum, link.raw, s)[..],
+                    )?,
+                    None => logger
+                        .error(&format!("✗ {} {}: {}", link.file, link.lnum, link.raw)[..])?,
+                };
             }
         };
     }
@@ -152,18 +156,26 @@ impl Link {
                     let status = response.status().as_u16();
                     match status {
                         200 => LinkStatus::Reachable,
-                        _ => LinkStatus::Unreachable(format!("received status code {}", status)),
+                        401 => LinkStatus::Reachable, // the resource exists but may require logging in.
+                        403 => LinkStatus::Reachable, // ^ same
+                        405 => LinkStatus::Reachable, // HEAD method not allowed.
+                        406 => LinkStatus::Reachable, // resource exits, but our 'Accept-' header may not match what the server can provide.
+                        _ => LinkStatus::Unreachable(Some(format!(
+                            "received status code {}",
+                            status
+                        ))),
                     }
                 }
                 Err(e) => {
                     if e.is_timeout() {
-                        LinkStatus::Unreachable(String::from("timeout error"))
+                        LinkStatus::Unreachable(Some(String::from("timeout error")))
                     } else {
                         match e.status() {
-                            Some(status) => {
-                                LinkStatus::Unreachable(format!("received status code {}", status))
-                            }
-                            None => LinkStatus::Unreachable(String::from("unknown")),
+                            Some(status) => LinkStatus::Unreachable(Some(format!(
+                                "received status code {}",
+                                status
+                            ))),
+                            None => LinkStatus::Unreachable(None),
                         }
                     }
                 }
@@ -172,7 +184,7 @@ impl Link {
             if Path::new(&self.raw[..]).exists() {
                 LinkStatus::Reachable
             } else {
-                LinkStatus::Unreachable(String::from("does not exist"))
+                LinkStatus::Unreachable(None)
             }
         }
     }
@@ -184,5 +196,5 @@ impl Link {
 
 enum LinkStatus {
     Reachable,
-    Unreachable(String),
+    Unreachable(Option<String>),
 }
