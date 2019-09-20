@@ -7,6 +7,5 @@ before_script:
 script:
   cargo fmt -- --check &&
   cargo build --verbose &&
-  cargo test  --verbose &&
-  cargo doc   --verbose
+  cargo test  --verbose
 dist: xenial
