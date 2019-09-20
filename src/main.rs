@@ -48,9 +48,13 @@ fn main() -> Result<(), ExitFailure> {
 
     let doc_files = vec![
         // Rust source files.
-        DocFile::new(vec!["*.rs"], r"\[[^\[\]]+\]\(([^\(\)]+)\)"),
+        DocFile::new(
+            vec!["*.rs"],
+            r"^\s*(///|//!).*\[[^\[\]]+\]\(([^\(\)]+)\)",
+            2,
+        ),
         // Extra markdown files.
-        DocFile::new(vec!["*.md"], r"\[[^\[\]]+\]\(([^\(\)]+)\)"),
+        DocFile::new(vec!["*.md"], r"\[[^\[\]]+\]\(([^\(\)]+)\)", 1),
     ];
 
     // We iterator through all rust and markdown files not included in your .gitignore.

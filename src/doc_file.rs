@@ -13,10 +13,11 @@ use crate::link::Link;
 pub struct DocFile {
     glob_set: GlobSet,
     pub link_matcher: RegexMatcher,
+    match_group: usize,
 }
 
 impl DocFile {
-    pub fn new(globs: Vec<&str>, link_pattern: &str) -> Self {
+    pub fn new(globs: Vec<&str>, link_pattern: &str, match_group: usize) -> Self {
         let mut glob_builder = GlobSetBuilder::new();
         for glob in globs {
             glob_builder.add(Glob::new(glob).unwrap());
@@ -26,6 +27,7 @@ impl DocFile {
         DocFile {
             glob_set,
             link_matcher,
+            match_group,
         }
     }
 
@@ -48,7 +50,7 @@ impl DocFile {
                 let mut captures = self.link_matcher.new_captures().unwrap();
                 self.link_matcher
                     .captures_iter(line.as_bytes(), &mut captures, |c| {
-                        let mat = c.get(1).unwrap();
+                        let mat = c.get(self.match_group).unwrap();
                         let mat = line[mat].to_string();
                         let link = Link::new(Arc::clone(p), lnum as usize, mat);
                         f(link);
