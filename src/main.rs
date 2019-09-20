@@ -1,18 +1,17 @@
-use std::path::Path;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 
 use exitfailure::ExitFailure;
-use grep_matcher::{Captures, Matcher};
-use grep_regex::RegexMatcher;
-use grep_searcher::sinks::UTF8;
-use grep_searcher::Searcher;
 use ignore::Walk;
 use structopt::StructOpt;
 use threadpool::ThreadPool;
 
+mod doc_file;
+mod link;
 mod log;
 
+use doc_file::DocFile;
+use link::LinkStatus;
 use log::Logger;
 
 #[derive(Debug, StructOpt)]
@@ -40,11 +39,6 @@ fn main() -> Result<(), ExitFailure> {
     let mut logger = Logger::default(opt.verbose, !opt.no_color);
     logger.debug(&format!("{:?}", opt)[..])?;
 
-    // This is the regular expression we use to find links.
-    let matcher = RegexMatcher::new(r"\[[^\[\]]+\]\(([^\(\)]+)\)").unwrap();
-
-    let mut searcher = Searcher::new();
-
     // Initialize thread pool and channel.
     let pool = ThreadPool::new(opt.concurrency);
     let (tx, rx) = channel();
@@ -52,73 +46,64 @@ fn main() -> Result<(), ExitFailure> {
     // We'll use a single HTTP client across threads.
     let http_client = Arc::new(reqwest::Client::new());
 
-    // We iterator through all files not included in .gitignore.
+    let doc_files = vec![
+        // Rust source files.
+        DocFile::new(
+            vec!["*.rs"],
+            r"^\s*(///|//!).*\[[^\[\]]+\]\(([^\(\)]+)\)",
+            2,
+        ),
+        // Extra markdown files.
+        DocFile::new(vec!["*.md"], r"\[[^\[\]]+\]\(([^\(\)]+)\)", 1),
+    ];
+
+    // We iterator through all rust and markdown files not included in your .gitignore.
     let file_iter = Walk::new("./")
         .filter_map(Result::ok)
         .filter(|x| match x.file_type() {
             Some(file_type) => file_type.is_file(),
             None => false,
-        });
+        })
+        .map(|x| x.into_path());
 
     let mut n_links = 0;
-    for x in file_iter {
-        let path = x.path();
-        let path_str = path.to_str();
-        if let None = path_str {
-            // File path is not valid unicode, just skip.
-            logger.warn(
-                &format!(
-                    "Filename is not valid unicode, skipping: {}",
-                    path.display()
-                )[..],
-            )?;
-            continue;
-        }
-        let path_str = path_str.unwrap();
 
-        logger.debug(&format!("Searching {}", path.display())[..])?;
+    for path in file_iter {
+        for doc_file in &doc_files {
+            if doc_file.is_match(&path) {
+                logger.debug(&format!("Searching {}", path.display())[..])?;
 
-        searcher.search_path(
-            &matcher,
-            path,
-            UTF8(|lnum, line| {
-                let mut captures = matcher.new_captures().unwrap();
-                matcher.captures_iter(line.as_bytes(), &mut captures, |c| {
+                let path_arc = Arc::new(path);
+
+                doc_file.iter_links(&path_arc, |mut link| {
                     n_links += 1;
-                    let m = c.get(1).unwrap();
-                    let raw = line[m].to_string();
-
-                    let mut link = Link::new(String::from(path_str), lnum as usize, raw);
-
                     let tx = tx.clone();
                     let http_client = http_client.clone();
                     pool.execute(move || {
                         link.verify(http_client);
                         tx.send(link).unwrap();
                     });
-
-                    true
                 })?;
 
-                Ok(true)
-            }),
-        )?;
+                break;
+            }
+        }
     }
 
     let mut n_bad_links = 0;
     for link in rx.iter().take(n_links) {
-        match link.status.unwrap() {
+        match link.status.as_ref().unwrap() {
             LinkStatus::Reachable => {
-                logger.info(&format!("✓ {} {}: {}", link.file, link.lnum, link.raw)[..])?;
+                logger.info(&format!("✓ {}", link)[..])?;
+            }
+            LinkStatus::Questionable(reason) => {
+                logger.warn(&format!("✓ {} ({})", link, reason)[..])?
             }
             LinkStatus::Unreachable(reason) => {
                 n_bad_links += 1;
                 match reason {
-                    Some(s) => logger.error(
-                        &format!("✗ {} {}: {} ({})", link.file, link.lnum, link.raw, s)[..],
-                    )?,
-                    None => logger
-                        .error(&format!("✗ {} {}: {}", link.file, link.lnum, link.raw)[..])?,
+                    Some(s) => logger.error(&format!("✗ {} ({})", link, s)[..])?,
+                    None => logger.error(&format!("✗ {}", link)[..])?,
                 };
             }
         };
@@ -130,71 +115,4 @@ fn main() -> Result<(), ExitFailure> {
     }
 
     Ok(())
-}
-
-struct Link {
-    file: String,
-    lnum: usize,
-    raw: String,
-    status: Option<LinkStatus>,
-}
-
-impl Link {
-    fn new(file: String, lnum: usize, raw: String) -> Self {
-        Link {
-            file,
-            lnum,
-            raw,
-            status: None,
-        }
-    }
-
-    fn _verify(&self, http_client: Arc<reqwest::Client>) -> LinkStatus {
-        if self.raw.starts_with("http") {
-            match http_client.head(&self.raw[..]).send() {
-                Ok(response) => {
-                    let status = response.status().as_u16();
-                    match status {
-                        200 => LinkStatus::Reachable,
-                        401 => LinkStatus::Reachable, // the resource exists but may require logging in.
-                        403 => LinkStatus::Reachable, // ^ same
-                        405 => LinkStatus::Reachable, // HEAD method not allowed.
-                        406 => LinkStatus::Reachable, // resource exits, but our 'Accept-' header may not match what the server can provide.
-                        _ => LinkStatus::Unreachable(Some(format!(
-                            "received status code {}",
-                            status
-                        ))),
-                    }
-                }
-                Err(e) => {
-                    if e.is_timeout() {
-                        LinkStatus::Unreachable(Some(String::from("timeout error")))
-                    } else {
-                        match e.status() {
-                            Some(status) => LinkStatus::Unreachable(Some(format!(
-                                "received status code {}",
-                                status
-                            ))),
-                            None => LinkStatus::Unreachable(None),
-                        }
-                    }
-                }
-            }
-        } else {
-            if Path::new(&self.raw[..]).exists() {
-                LinkStatus::Reachable
-            } else {
-                LinkStatus::Unreachable(None)
-            }
-        }
-    }
-
-    fn verify(&mut self, http_client: Arc<reqwest::Client>) {
-        self.status = Some(self._verify(http_client));
-    }
-}
-
-enum LinkStatus {
-    Reachable,
-    Unreachable(Option<String>),
 }

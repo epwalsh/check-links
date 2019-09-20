@@ -1,15 +1,11 @@
 language: rust
+cache: cargo
 rust:
   - stable
-  # - beta
 before_script:
   - rustup component add rustfmt
 script:
   cargo fmt -- --check &&
   cargo build --verbose &&
-  cargo test  --verbose &&
-  cargo doc   --verbose
-branches:
-  only:
-    - master
+  cargo test  --verbose
 dist: xenial

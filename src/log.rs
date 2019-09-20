@@ -19,8 +19,9 @@ pub struct Logger {
 impl Logger {
     pub fn default(verbosity: usize, color: bool) -> Self {
         let level = match verbosity {
-            0 => Level::WARNING,
-            1 => Level::INFO,
+            0 => Level::ERROR,
+            1 => Level::WARNING,
+            2 => Level::INFO,
             _ => Level::DEBUG,
         };
         let handle = Box::new(io::stdout());
