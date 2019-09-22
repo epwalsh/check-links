@@ -4,6 +4,10 @@ build :
 
 .PHONY : fmt
 fmt :
+	cargo fmt --
+
+.PHONY : check-fmt
+check-fmt :
 	cargo fmt -- --check
 
 .PHONY : test
