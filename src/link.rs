@@ -2,6 +2,11 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use grep_regex::{Error, RegexMatcherBuilder};
+use grep_searcher::sinks::UTF8;
+use grep_searcher::Searcher;
+use regex::Regex;
+
 pub struct Link {
     pub file: Arc<PathBuf>,
     pub lnum: usize,
@@ -22,7 +27,7 @@ pub enum LinkStatus {
 }
 
 impl Link {
-    pub fn new<'a>(file: Arc<PathBuf>, lnum: usize, raw: String) -> Self {
+    pub fn new(file: Arc<PathBuf>, lnum: usize, raw: String) -> Self {
         let kind: LinkKind;
         if raw.starts_with("http") {
             kind = LinkKind::Http;
@@ -35,6 +40,24 @@ impl Link {
             raw,
             kind,
             status: None,
+        }
+    }
+
+    fn split_section(&self) -> (Option<&str>, Option<&str>) {
+        lazy_static! {
+            static ref SECTION_RE: Regex = Regex::new(r"^(.*)#+([A-Za-z0-9_-]+)$").unwrap();
+        }
+        match SECTION_RE.captures(&self.raw[..]) {
+            Some(caps) => {
+                let section = caps.get(2).unwrap().as_str();
+                let base = caps.get(1).unwrap().as_str();
+                if base == "" {
+                    (None, Some(section))
+                } else {
+                    (Some(base), Some(section))
+                }
+            }
+            None => (Some(&self.raw[..]), None),
         }
     }
 
@@ -88,10 +111,50 @@ impl Link {
                     Some(d) => d,
                     None => Path::new("./"),
                 };
-                if dir.join(Path::new(&self.raw[..])).exists() {
-                    LinkStatus::Reachable
-                } else {
-                    LinkStatus::Unreachable(None)
+                let (base, section) = self.split_section();
+                match section {
+                    // If no section, just check that base exists.
+                    None => match base {
+                        Some(b) => {
+                            let full_path = dir.join(Path::new(b));
+                            match full_path.exists() {
+                                true => LinkStatus::Reachable,
+                                false => LinkStatus::Unreachable(None),
+                            }
+                        }
+                        None => LinkStatus::Unreachable(None),
+                    },
+                    // But if there is a section...
+                    Some(s) => match base {
+                        Some(b) => {
+                            let full_path = dir.join(Path::new(b));
+                            match full_path.exists() {
+                                true => match self.find_section(&full_path, s) {
+                                    Ok(true) => LinkStatus::Reachable,
+                                    Ok(false) => LinkStatus::Questionable(format!(
+                                        "failed to resolve section #{}",
+                                        s
+                                    )),
+                                    Err(e) => LinkStatus::Questionable(format!(
+                                        "failed to resolve section #{} {:?}",
+                                        s, e
+                                    )),
+                                },
+                                false => LinkStatus::Unreachable(None),
+                            }
+                        }
+                        None => match self.find_section(self.file.as_ref(), s) {
+                            Ok(true) => LinkStatus::Reachable,
+                            Ok(false) => LinkStatus::Questionable(format!(
+                                "failed to resolve section #{}",
+                                s
+                            )),
+                            Err(e) => LinkStatus::Questionable(format!(
+                                "failed to find section #{} {:?}",
+                                s, e
+                            )),
+                        },
+                    },
                 }
             }
         }
@@ -99,6 +162,25 @@ impl Link {
 
     pub fn verify(&mut self, http_client: Arc<reqwest::Client>) {
         self.status = Some(self._verify(http_client));
+    }
+
+    pub fn find_section(&self, path: &Path, section: &str) -> Result<bool, Error> {
+        let mut searcher = Searcher::new();
+        let matcher = RegexMatcherBuilder::new()
+            .case_insensitive(true)
+            .build(&section.replace("-", " ")[..])?;
+        let mut found: bool = false;
+        searcher
+            .search_path(
+                &matcher,
+                path,
+                UTF8(|_, _| {
+                    found = true;
+                    Ok(true)
+                }),
+            )
+            .unwrap();
+        Ok(found)
     }
 }
 

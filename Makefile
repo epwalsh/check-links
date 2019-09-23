@@ -1,6 +1,10 @@
+.PHONY : release
+release :
+	cargo build --release
+
 .PHONY : build
 build :
-	cargo build --verbose
+	cargo build
 
 .PHONY : fmt
 fmt :

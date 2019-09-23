@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate lazy_static;
+
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 
@@ -110,12 +113,12 @@ fn main() -> Result<(), ExitFailure> {
                 logger.info(&format!("✓ {}", link)[..])?;
             }
             LinkStatus::Questionable(reason) => {
-                logger.warn(&format!("✓ {} ({})", link, reason)[..])?
+                logger.warn(&format!("✗ {}\n        ► {}", link, reason)[..])?;
             }
             LinkStatus::Unreachable(reason) => {
                 n_bad_links += 1;
                 match reason {
-                    Some(s) => logger.error(&format!("✗ {} ({})", link, s)[..])?,
+                    Some(s) => logger.error(&format!("✗ {}\n        ► {}", link, s)[..])?,
                     None => logger.error(&format!("✗ {}", link)[..])?,
                 };
             }
