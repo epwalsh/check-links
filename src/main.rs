@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate lazy_static;
+
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 
@@ -39,25 +42,30 @@ fn main() -> Result<(), ExitFailure> {
     let mut logger = Logger::default(opt.verbose, !opt.no_color);
     logger.debug(&format!("{:?}", opt)[..])?;
 
-    // Initialize thread pool and channel.
+    // Initialize thread pool and channel. Each link to check will get its own copy
+    // of the transmitter `tx`. When the link is verified we'll send the results through
+    // the channel to the receiver `rx`. Then we gather all the results and log them
+    // to the terminal.
     let pool = ThreadPool::new(opt.concurrency);
     let (tx, rx) = channel();
 
     // We'll use a single HTTP client across threads.
     let http_client = Arc::new(reqwest::Client::new());
 
+    // We'll search all Rust and Markdown files.
     let doc_files = vec![
-        // Rust source files.
+        // Rust files.
         DocFile::new(
             vec!["*.rs"],
             r"^\s*(///|//!).*\[[^\[\]]+\]\(([^\(\)]+)\)",
             2,
         ),
-        // Extra markdown files.
+        // Markdown files.
         DocFile::new(vec!["*.md"], r"\[[^\[\]]+\]\(([^\(\)]+)\)", 1),
     ];
 
-    // We iterator through all rust and markdown files not included in your .gitignore.
+    // Build file iterator.
+    // We iterator through all non-hidden Rust and Markdown files not included in a .gitignore.
     let file_iter = Walk::new("./")
         .filter_map(Result::ok)
         .filter(|x| match x.file_type() {
@@ -66,8 +74,12 @@ fn main() -> Result<(), ExitFailure> {
         })
         .map(|x| x.into_path());
 
+    // Keep track of the total number of links so we know how many the receiver `rx`
+    // should be expecting.
     let mut n_links = 0;
 
+    // Now iter through all files in our `file_iter` and check if they match one of
+    // the doc files.
     for path in file_iter {
         for doc_file in &doc_files {
             if doc_file.is_match(&path) {
@@ -75,6 +87,9 @@ fn main() -> Result<(), ExitFailure> {
 
                 let path_arc = Arc::new(path);
 
+                // Search for links in the file. For each link found, we send a closure
+                // to the thread pool that will verify the link and report the results
+                // to the channel.
                 doc_file.iter_links(&path_arc, |mut link| {
                     n_links += 1;
                     let tx = tx.clone();
@@ -90,6 +105,7 @@ fn main() -> Result<(), ExitFailure> {
         }
     }
 
+    // Now loop through all the links we found and log the results to the terminal.
     let mut n_bad_links = 0;
     for link in rx.iter().take(n_links) {
         match link.status.as_ref().unwrap() {
@@ -97,12 +113,12 @@ fn main() -> Result<(), ExitFailure> {
                 logger.info(&format!("✓ {}", link)[..])?;
             }
             LinkStatus::Questionable(reason) => {
-                logger.warn(&format!("✓ {} ({})", link, reason)[..])?
+                logger.warn(&format!("✗ {}\n        ► {}", link, reason)[..])?;
             }
             LinkStatus::Unreachable(reason) => {
                 n_bad_links += 1;
                 match reason {
-                    Some(s) => logger.error(&format!("✗ {} ({})", link, s)[..])?,
+                    Some(s) => logger.error(&format!("✗ {}\n        ► {}", link, s)[..])?,
                     None => logger.error(&format!("✗ {}", link)[..])?,
                 };
             }
@@ -110,6 +126,7 @@ fn main() -> Result<(), ExitFailure> {
     }
 
     if n_bad_links > 0 {
+        // Exit with an error code if any bad links were found.
         logger.error(&format!("Found {} bad links", n_bad_links)[..])?;
         std::process::exit(1);
     }
