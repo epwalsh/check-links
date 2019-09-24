@@ -25,19 +25,19 @@ use log::Logger;
     raw(setting = "structopt::clap::AppSettings::ColoredHelp")
 )]
 struct Opt {
-    /// Set the number of threads.
+    /// Set the number of threads
     #[structopt(short = "c", long = "concurrency", default_value = "10")]
     concurrency: usize,
 
-    /// Verbose mode (-v, -vv, -vvv, etc).
+    /// Verbose mode (-v, -vv, -vvv, etc)
     #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
     verbose: usize,
 
-    /// Don't log in color.
+    /// Don't log in color
     #[structopt(long = "no-color")]
     no_color: bool,
 
-    /// Sort the output by file and line number.
+    /// Sort the output by file and line number
     #[structopt(short = "s", long = "sort")]
     sort: bool
 }
