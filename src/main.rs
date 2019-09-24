@@ -20,7 +20,7 @@ use log::Logger;
 
 #[derive(Debug, StructOpt)]
 #[structopt(
-    name = "cargo-links",
+    name = "check-links",
     about = "Check the links in your crate's documentation.",
     raw(setting = "structopt::clap::AppSettings::ColoredHelp")
 )]
