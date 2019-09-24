@@ -39,7 +39,7 @@ struct Opt {
 
     /// Sort the output by file and line number
     #[structopt(short = "s", long = "sort")]
-    sort: bool
+    sort: bool,
 }
 
 fn main() -> Result<(), ExitFailure> {

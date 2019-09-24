@@ -217,7 +217,9 @@ impl PartialOrd for Link {
 
 impl PartialEq for Link {
     fn eq(&self, other: &Self) -> bool {
-        self.file.as_ref() == other.file.as_ref() && self.lnum == other.lnum && self.raw == other.raw
+        self.file.as_ref() == other.file.as_ref()
+            && self.lnum == other.lnum
+            && self.raw == other.raw
     }
 }
 
