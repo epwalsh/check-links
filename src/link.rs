@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -195,3 +196,29 @@ impl fmt::Display for Link {
         )
     }
 }
+
+impl Ord for Link {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.file.as_ref() != other.file.as_ref() {
+            self.file.as_ref().cmp(&other.file.as_ref())
+        } else if self.lnum != other.lnum {
+            self.lnum.cmp(&other.lnum)
+        } else {
+            self.raw.cmp(&other.raw)
+        }
+    }
+}
+
+impl PartialOrd for Link {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Link {
+    fn eq(&self, other: &Self) -> bool {
+        self.file.as_ref() == other.file.as_ref() && self.lnum == other.lnum && self.raw == other.raw
+    }
+}
+
+impl Eq for Link {}

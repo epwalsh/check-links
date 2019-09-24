@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
+use std::io;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 
@@ -14,7 +15,7 @@ mod link;
 mod log;
 
 use doc_file::DocFile;
-use link::LinkStatus;
+use link::{Link, LinkStatus};
 use log::Logger;
 
 #[derive(Debug, StructOpt)]
@@ -35,6 +36,10 @@ struct Opt {
     /// Don't log in color.
     #[structopt(long = "no-color")]
     no_color: bool,
+
+    /// Sort the output by file and line number.
+    #[structopt(short = "s", long = "sort")]
+    sort: bool
 }
 
 fn main() -> Result<(), ExitFailure> {
@@ -106,8 +111,9 @@ fn main() -> Result<(), ExitFailure> {
     }
 
     // Now loop through all the links we found and log the results to the terminal.
+    let link_iter = rx.iter().take(n_links);
     let mut n_bad_links = 0;
-    for link in rx.iter().take(n_links) {
+    let mut log_link = |link: Link| -> Result<(), io::Error> {
         match link.status.as_ref().unwrap() {
             LinkStatus::Reachable => {
                 logger.info(&format!("✓ {}", link)[..])?;
@@ -123,6 +129,18 @@ fn main() -> Result<(), ExitFailure> {
                 };
             }
         };
+        Ok(())
+    };
+    if opt.sort {
+        let mut link_iter: Vec<Link> = link_iter.collect();
+        link_iter.sort_unstable();
+        for link in link_iter {
+            log_link(link)?;
+        }
+    } else {
+        for link in link_iter {
+            log_link(link)?;
+        }
     }
 
     if n_bad_links > 0 {
