@@ -6,7 +6,7 @@ use std::sync::mpsc::channel;
 use std::sync::Arc;
 
 use exitfailure::ExitFailure;
-use ignore::Walk;
+use ignore::WalkBuilder;
 use structopt::StructOpt;
 use threadpool::ThreadPool;
 
@@ -40,6 +40,10 @@ struct Opt {
     /// Sort the output by file and line number
     #[structopt(short = "s", long = "sort")]
     sort: bool,
+
+    /// Set the maximum directory depth to recurse
+    #[structopt(short = "d", long = "depth")]
+    depth: Option<usize>,
 }
 
 fn main() -> Result<(), ExitFailure> {
@@ -71,7 +75,9 @@ fn main() -> Result<(), ExitFailure> {
 
     // Build file iterator.
     // We iterator through all non-hidden Rust and Markdown files not included in a .gitignore.
-    let file_iter = Walk::new("./")
+    let file_iter = WalkBuilder::new("./")
+        .max_depth(opt.depth)
+        .build()
         .filter_map(Result::ok)
         .filter(|x| match x.file_type() {
             Some(file_type) => file_type.is_file(),
