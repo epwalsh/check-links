@@ -29,12 +29,7 @@ pub enum LinkStatus {
 
 impl Link {
     pub fn new(file: Arc<PathBuf>, lnum: usize, raw: String) -> Self {
-        let kind: LinkKind;
-        if raw.starts_with("http") {
-            kind = LinkKind::Http;
-        } else {
-            kind = LinkKind::Local;
-        }
+        let kind = if raw.starts_with("http") { LinkKind::Http } else { LinkKind::Local };
         Link {
             file,
             lnum,
@@ -118,9 +113,10 @@ impl Link {
                     None => match base {
                         Some(b) => {
                             let full_path = dir.join(Path::new(b));
-                            match full_path.exists() {
-                                true => LinkStatus::Reachable,
-                                false => LinkStatus::Unreachable(None),
+                            if full_path.exists() {
+                                LinkStatus::Reachable
+                            } else {
+                                LinkStatus::Unreachable(None)
                             }
                         }
                         None => LinkStatus::Unreachable(None),
@@ -129,8 +125,8 @@ impl Link {
                     Some(s) => match base {
                         Some(b) => {
                             let full_path = dir.join(Path::new(b));
-                            match full_path.exists() {
-                                true => match self.find_section(&full_path, s) {
+                            if full_path.exists() {
+                                match self.find_section(&full_path, s) {
                                     Ok(true) => LinkStatus::Reachable,
                                     Ok(false) => LinkStatus::Questionable(format!(
                                         "failed to resolve section #{}",
@@ -140,8 +136,9 @@ impl Link {
                                         "failed to resolve section #{} {:?}",
                                         s, e
                                     )),
-                                },
-                                false => LinkStatus::Unreachable(None),
+                                }
+                            } else {
+                                LinkStatus::Unreachable(None)
                             }
                         }
                         None => match self.find_section(self.file.as_ref(), s) {

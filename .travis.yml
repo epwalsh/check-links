@@ -4,8 +4,10 @@ rust:
   - stable
 before_script:
   - rustup component add rustfmt
+  - rustup component add clippy
 script:
-  cargo fmt -- --check &&
-  cargo build --verbose &&
-  cargo test  --verbose
+  - cargo fmt -- --check
+  - cargo clippy -- -D warnings
+  - cargo build --verbose
+  - cargo test --verbose
 dist: xenial

@@ -48,7 +48,7 @@ impl Logger {
                     msg.color(color)
                 )?;
             } else {
-                write!(self.handle, "{}{}\n", prelude, msg)?;
+                writeln!(self.handle, "{}{}", prelude, msg)?;
             }
         }
         Ok(())

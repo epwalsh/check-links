@@ -17,3 +17,7 @@ check-fmt :
 .PHONY : test
 test :
 	cargo test --verbose
+
+.PHONY : clippy
+clippy :
+	cargo clippy -- -D warnings
