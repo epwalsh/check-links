@@ -29,7 +29,11 @@ pub enum LinkStatus {
 
 impl Link {
     pub fn new(file: Arc<PathBuf>, lnum: usize, raw: String) -> Self {
-        let kind = if raw.starts_with("http") { LinkKind::Http } else { LinkKind::Local };
+        let kind = if raw.starts_with("http") {
+            LinkKind::Http
+        } else {
+            LinkKind::Local
+        };
         Link {
             file,
             lnum,

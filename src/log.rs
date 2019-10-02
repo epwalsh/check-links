@@ -41,9 +41,9 @@ impl Logger {
     ) -> Result<(), io::Error> {
         if (level as i32) >= (self.level as i32) {
             if self.color {
-                write!(
+                writeln!(
                     self.handle,
-                    "{}{}\n",
+                    "{}{}",
                     prelude.color(color).bold(),
                     msg.color(color)
                 )?;
