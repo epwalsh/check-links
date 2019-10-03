@@ -3,11 +3,10 @@ cache: cargo
 rust:
   - stable
 before_script:
-  - rustup component add rustfmt
-  - rustup component add clippy
+  make setup
 script:
-  cargo fmt -- --check &&
-  cargo clippy -- -D warnings &&
-  cargo build &&
-  cargo test
+  make all-checks
+branches:
+  only:
+    - master
 dist: xenial
