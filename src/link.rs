@@ -68,6 +68,7 @@ impl Link {
                         let status = response.status().as_u16();
                         match status {
                             200 => LinkStatus::Reachable,
+                            302 => LinkStatus::Reachable,
                             // the resource exists but may require logging in.
                             401 => {
                                 LinkStatus::Questionable(format!("received status code {}", status))
@@ -90,14 +91,12 @@ impl Link {
                             ))),
                         }
                     }
-                    Err(e) => {
-                        match e {
-                            isahc::Error::Timeout => {
-                                LinkStatus::Unreachable(Some(String::from("timeout error")))
-                            },
-                            _ => LinkStatus::Unreachable(None),
+                    Err(e) => match e {
+                        isahc::Error::Timeout => {
+                            LinkStatus::Unreachable(Some(String::from("timeout error")))
                         }
-                    }
+                        _ => LinkStatus::Unreachable(None),
+                    },
                 }
             }
             LinkKind::Local => {
@@ -212,9 +211,7 @@ impl PartialOrd for Link {
 
 impl PartialEq for Link {
     fn eq(&self, other: &Self) -> bool {
-        self.file == other.file
-            && self.lnum == other.lnum
-            && self.raw == other.raw
+        self.file == other.file && self.lnum == other.lnum && self.raw == other.raw
     }
 }
 

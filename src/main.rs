@@ -21,10 +21,6 @@ use log::Logger;
     raw(setting = "structopt::clap::AppSettings::ColoredHelp")
 )]
 struct Opt {
-    /// Set the number of threads
-    #[structopt(short = "c", long = "concurrency", default_value = "10")]
-    concurrency: usize,
-
     /// Verbose mode (-v, -vv, -vvv, etc)
     #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
     verbose: usize,
@@ -32,10 +28,6 @@ struct Opt {
     /// Don't log in color
     #[structopt(long = "no-color")]
     no_color: bool,
-
-    /// Sort the output by file and line number
-    #[structopt(short = "s", long = "sort")]
-    sort: bool,
 
     /// Set the maximum directory depth to recurse
     #[structopt(short = "d", long = "depth")]
@@ -52,7 +44,7 @@ async fn main() -> Result<(), ExitFailure> {
     // of the transmitter `tx`. When the link is verified we'll send the results through
     // the channel to the receiver `rx`. Then we gather all the results and log them
     // to the terminal.
-    let (tx, mut rx) = channel(10);
+    let (tx, mut rx) = channel(100);
 
     // We'll search all Rust and Markdown files.
     let doc_files = vec![
@@ -89,15 +81,14 @@ async fn main() -> Result<(), ExitFailure> {
             if doc_file.is_match(&path) {
                 logger.debug(&format!("Searching {}", path.display())[..])?;
 
-                // Search for links in the file. For each link found, we send a closure
-                // to the thread pool that will verify the link and report the results
-                // to the channel.
+                // Search for links in the file. For each link found, we spawn a task
+                // that will verify the link and report the results to the channel.
                 doc_file.iter_links(&path, |mut link| {
                     n_links += 1;
                     let mut tx = tx.clone();
                     tokio::spawn(async move {
                         link.verify().await;
-                        if let Err(_) = tx.send(link).await {
+                        if tx.send(link).await.is_err() {
                             std::process::exit(1);
                         };
                     });
@@ -133,18 +124,6 @@ async fn main() -> Result<(), ExitFailure> {
             break;
         }
     }
-
-    // if opt.sort {
-    //     let mut link_iter: Vec<Link> = link_iter.collect();
-    //     link_iter.sort_unstable();
-    //     for link in link_iter {
-    //         log_link(link)?;
-    //     }
-    // } else {
-    //     for link in link_iter {
-    //         log_link(link)?;
-    //     }
-    // }
 
     if n_bad_links > 0 {
         // Exit with an error code if any bad links were found.
