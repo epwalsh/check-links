@@ -1,7 +1,6 @@
 use std::cmp::Ordering;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use grep_regex::{Error, RegexMatcherBuilder};
 use grep_searcher::sinks::UTF8;
@@ -9,7 +8,7 @@ use grep_searcher::Searcher;
 use regex::Regex;
 
 pub struct Link {
-    pub file: Arc<PathBuf>,
+    pub file: PathBuf,
     pub lnum: usize,
     pub raw: String,
     pub kind: LinkKind,
@@ -28,7 +27,7 @@ pub enum LinkStatus {
 }
 
 impl Link {
-    pub fn new(file: Arc<PathBuf>, lnum: usize, raw: String) -> Self {
+    pub fn new(file: PathBuf, lnum: usize, raw: String) -> Self {
         let kind = if raw.starts_with("http") {
             LinkKind::Http
         } else {
@@ -61,10 +60,10 @@ impl Link {
         }
     }
 
-    fn _verify(&self, http_client: Arc<reqwest::Client>) -> LinkStatus {
+    async fn _verify(&self) -> LinkStatus {
         match self.kind {
             LinkKind::Http => {
-                match http_client.head(&self.raw[..]).send() {
+                match isahc::head_async(&self.raw[..]).await {
                     Ok(response) => {
                         let status = response.status().as_u16();
                         match status {
@@ -92,22 +91,17 @@ impl Link {
                         }
                     }
                     Err(e) => {
-                        if e.is_timeout() {
-                            LinkStatus::Unreachable(Some(String::from("timeout error")))
-                        } else {
-                            match e.status() {
-                                Some(status) => LinkStatus::Unreachable(Some(format!(
-                                    "received status code {}",
-                                    status
-                                ))),
-                                None => LinkStatus::Unreachable(None),
-                            }
+                        match e {
+                            isahc::Error::Timeout => {
+                                LinkStatus::Unreachable(Some(String::from("timeout error")))
+                            },
+                            _ => LinkStatus::Unreachable(None),
                         }
                     }
                 }
             }
             LinkKind::Local => {
-                let dir = match self.file.as_ref().parent() {
+                let dir = match self.file.parent() {
                     Some(d) => d,
                     None => Path::new("./"),
                 };
@@ -145,7 +139,7 @@ impl Link {
                                 LinkStatus::Unreachable(None)
                             }
                         }
-                        None => match self.find_section(self.file.as_ref(), s) {
+                        None => match self.find_section(&self.file, s) {
                             Ok(true) => LinkStatus::Reachable,
                             Ok(false) => LinkStatus::Questionable(format!(
                                 "failed to resolve section #{}",
@@ -162,8 +156,8 @@ impl Link {
         }
     }
 
-    pub fn verify(&mut self, http_client: Arc<reqwest::Client>) {
-        self.status = Some(self._verify(http_client));
+    pub async fn verify(&mut self) {
+        self.status = Some(self._verify().await);
     }
 
     pub fn find_section(&self, path: &Path, section: &str) -> Result<bool, Error> {
@@ -191,7 +185,7 @@ impl fmt::Display for Link {
         write!(
             f,
             "{} [line {}]: {}",
-            self.file.as_ref().display(),
+            self.file.display(),
             self.lnum,
             self.raw
         )
@@ -200,8 +194,8 @@ impl fmt::Display for Link {
 
 impl Ord for Link {
     fn cmp(&self, other: &Self) -> Ordering {
-        if self.file.as_ref() != other.file.as_ref() {
-            self.file.as_ref().cmp(&other.file.as_ref())
+        if self.file != other.file {
+            self.file.cmp(&other.file)
         } else if self.lnum != other.lnum {
             self.lnum.cmp(&other.lnum)
         } else {
@@ -218,7 +212,7 @@ impl PartialOrd for Link {
 
 impl PartialEq for Link {
     fn eq(&self, other: &Self) -> bool {
-        self.file.as_ref() == other.file.as_ref()
+        self.file == other.file
             && self.lnum == other.lnum
             && self.raw == other.raw
     }
