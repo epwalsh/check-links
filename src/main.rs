@@ -34,7 +34,7 @@ struct Opt {
     depth: Option<usize>,
 }
 
-#[tokio::main]
+#[tokio::main(threaded_scheduler)]
 async fn main() -> Result<(), ExitFailure> {
     let opt = Opt::from_args();
     let mut logger = Logger::default(opt.verbose, !opt.no_color);
