@@ -95,8 +95,15 @@ async fn main() -> Result<(), ExitFailure> {
                 })?;
 
                 break;
+            } else {
+                logger.debug(&format!("Ignoring {}", path.display())[..])?;
             }
         }
+    }
+
+    if n_links == 0 {
+        logger.info("No links found")?;
+        std::process::exit(0);
     }
 
     // Now loop through all the links we found and log the results to the terminal.
