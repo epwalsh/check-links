@@ -1,6 +1,5 @@
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use grep_matcher::{Captures, Matcher};
@@ -38,21 +37,21 @@ impl DocFile {
         self.glob_set.is_match(p)
     }
 
-    pub fn iter_links<F>(&self, p: &Arc<PathBuf>, mut f: F) -> Result<(), io::Error>
+    pub fn iter_links<F>(&self, p: &PathBuf, mut f: F) -> Result<(), io::Error>
     where
         F: FnMut(Link),
     {
         let mut searcher = Searcher::new();
         searcher.search_path(
             &self.link_matcher,
-            p.as_ref(),
+            p,
             UTF8(|lnum, line| {
                 let mut captures = self.link_matcher.new_captures().unwrap();
                 self.link_matcher
                     .captures_iter(line.as_bytes(), &mut captures, |c| {
                         let mat = c.get(self.match_group).unwrap();
                         let mat = line[mat].to_string();
-                        let link = Link::new(Arc::clone(p), lnum as usize, mat);
+                        let link = Link::new(p.clone(), lnum as usize, mat);
                         f(link);
                         true
                     })?;

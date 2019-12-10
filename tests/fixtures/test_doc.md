@@ -3,7 +3,7 @@
 [README](../../README.md#not-a-section)
 [foo](foo)
 [foo](https://foo.com)
-[foo](https://vinny.structurely.com)
+[foo](https://structurely.com)
 [foo](https://vinny.development.structurely.com/slack/command)
 [foo](https://vinny.development.structurely.com/slack/fudge)
 

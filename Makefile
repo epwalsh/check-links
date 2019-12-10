@@ -28,10 +28,6 @@ lint :
 test :
 	cargo test
 
-.PHONY : bench
-bench :
-	cargo bench
-
 .PHONY : doc
 doc :
 	cargo doc
