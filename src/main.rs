@@ -85,6 +85,7 @@ async fn main() -> Result<(), ExitFailure> {
     let http_client = Arc::new(
         isahc::HttpClient::builder()
             .timeout(Duration::from_secs(opt.timeout))
+            .connect_timeout(Duration::from_secs(opt.timeout))
             .build()?,
     );
 
