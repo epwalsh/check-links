@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use grep_regex::{Error, RegexMatcherBuilder};
 use grep_searcher::sinks::UTF8;
@@ -60,10 +61,10 @@ impl Link {
         }
     }
 
-    async fn _verify(&self) -> LinkStatus {
+    async fn _verify(&self, http_client: Arc<isahc::HttpClient>) -> LinkStatus {
         match self.kind {
             LinkKind::Http => {
-                match isahc::head_async(&self.raw[..]).await {
+                match http_client.head_async(&self.raw[..]).await {
                     Ok(response) => {
                         let status = response.status().as_u16();
                         match status {
@@ -155,8 +156,8 @@ impl Link {
         }
     }
 
-    pub async fn verify(&mut self) {
-        self.status = Some(self._verify().await);
+    pub async fn verify(&mut self, http_client: Arc<isahc::HttpClient>) {
+        self.status = Some(self._verify(http_client).await);
     }
 
     pub fn find_section(&self, path: &Path, section: &str) -> Result<bool, Error> {

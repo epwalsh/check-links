@@ -1,6 +1,9 @@
 #[macro_use]
 extern crate lazy_static;
 
+use std::sync::Arc;
+use std::time::Duration;
+
 use exitfailure::ExitFailure;
 use ignore::WalkBuilder;
 use structopt::StructOpt;
@@ -32,6 +35,10 @@ struct Opt {
     /// Set the maximum directory depth to recurse
     #[structopt(short = "d", long = "depth")]
     depth: Option<usize>,
+
+    /// Specify the timeout for HTTP requests
+    #[structopt(short = "t", long = "timeout", default_value = "3")]
+    timeout: u64,
 }
 
 #[tokio::main(threaded_scheduler)]
@@ -74,6 +81,13 @@ async fn main() -> Result<(), ExitFailure> {
     // should be expecting.
     let mut n_links = 0u32;
 
+    // Configure HTTP client.
+    let http_client = Arc::new(
+        isahc::HttpClient::builder()
+            .timeout(Duration::from_secs(opt.timeout))
+            .build()?,
+    );
+
     // Now iter through all files in our `file_iter` and check if they match one of
     // the doc files.
     for path in file_iter {
@@ -86,8 +100,9 @@ async fn main() -> Result<(), ExitFailure> {
                 doc_file.iter_links(&path, |mut link| {
                     n_links += 1;
                     let mut tx = tx.clone();
+                    let http_client = http_client.clone();
                     tokio::spawn(async move {
-                        link.verify().await;
+                        link.verify(http_client).await;
                         if tx.send(link).await.is_err() {
                             std::process::exit(1);
                         };
