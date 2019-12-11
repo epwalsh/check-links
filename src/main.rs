@@ -117,14 +117,11 @@ async fn main() -> Result<(), ExitFailure> {
         }
     }
 
-    if n_links == 0 {
-        logger.info("No links found")?;
-        std::process::exit(0);
-    }
+    // Drop transmitter so that the receiver knows it is finished.
+    drop(tx);
 
     // Now loop through all the links we found and log the results to the terminal.
     let mut n_bad_links = 0u32;
-    let mut n_processed = 0u32;
 
     while let Some(link) = rx.recv().await {
         match link.status.as_ref().unwrap() {
@@ -142,13 +139,11 @@ async fn main() -> Result<(), ExitFailure> {
                 };
             }
         };
-        n_processed += 1;
-        if n_processed == n_links {
-            break;
-        }
     }
 
-    if n_bad_links > 0 {
+    if n_links == 0 {
+        logger.info("No links found")?;
+    } else if n_bad_links > 0 {
         // Exit with an error code if any bad links were found.
         logger.error(&format!("{} bad links out of {} links found", n_bad_links, n_links)[..])?;
         std::process::exit(1);
