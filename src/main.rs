@@ -41,6 +41,13 @@ struct Opt {
     timeout: u64,
 }
 
+fn maybe_pluralize(n: u32) -> &'static str {
+    match n {
+        1 => "",
+        _ => "s",
+    }
+}
+
 #[tokio::main(threaded_scheduler)]
 async fn main() -> Result<(), ExitFailure> {
     let opt = Opt::from_args();
@@ -121,18 +128,19 @@ async fn main() -> Result<(), ExitFailure> {
     drop(tx);
 
     // Now loop through all the links we found and log the results to the terminal.
-    let mut n_bad_links = 0u32;
-
+    let mut n_errors = 0u32;
+    let mut n_warnings = 0u32;
     while let Some(link) = rx.recv().await {
         match link.status.as_ref().unwrap() {
             LinkStatus::Reachable => {
                 logger.info(&format!("✓ {}", link)[..])?;
             }
             LinkStatus::Questionable(reason) => {
+                n_warnings += 1;
                 logger.warn(&format!("✗ {}\n        ► {}", link, reason)[..])?;
             }
             LinkStatus::Unreachable(reason) => {
-                n_bad_links += 1;
+                n_errors += 1;
                 match reason {
                     Some(s) => logger.error(&format!("✗ {}\n        ► {}", link, s)[..])?,
                     None => logger.error(&format!("✗ {}", link)[..])?,
@@ -143,12 +151,28 @@ async fn main() -> Result<(), ExitFailure> {
 
     if n_links == 0 {
         logger.info("No links found")?;
-    } else if n_bad_links > 0 {
+    } else if n_errors > 0 {
         // Exit with an error code if any bad links were found.
-        logger.error(&format!("{} bad links out of {} links found", n_bad_links, n_links)[..])?;
+        logger.error(&format!(
+            "{} error{}, {} warning{} out of {} link{} found",
+            n_errors,
+            maybe_pluralize(n_errors),
+            n_warnings,
+            maybe_pluralize(n_warnings),
+            n_links,
+            maybe_pluralize(n_links)
+        ))?;
         std::process::exit(1);
     } else {
-        logger.info(&format!("No bad links out of {} links found", n_links))?;
+        logger.info(&format!(
+            "{} error{}, {} warning{} out of {} link{} found",
+            n_errors,
+            maybe_pluralize(n_errors),
+            n_warnings,
+            maybe_pluralize(n_warnings),
+            n_links,
+            maybe_pluralize(n_links)
+        ))?;
     }
 
     Ok(())
